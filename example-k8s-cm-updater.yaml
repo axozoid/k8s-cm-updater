@@ -1,0 +1,103 @@
+---
+# our secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-app-secrets
+data:
+  value1: Mzk1MjgkdmRnN0pi
+  value2: c3VQM1JwQHMkdzByRAo=
+---
+# configmap represents a template with vars
+# that will be filled by values from the secret
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-app-configmap
+  namespace: default
+data:
+  config.file: |
+    The first value is ${value1}.
+    Extra line.
+  inline-value: ${value2}
+---
+# create a service account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name:  cm-updater
+---
+# create a role that can read and create configmaps
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: role-cm-updater
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "create", "patch"]
+---
+# link the role with the service account
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: rb-cm-updater
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: role-cm-updater
+subjects:
+- kind: ServiceAccount
+  name: cm-updater
+  namespace: default
+---
+# sample pod that
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-app
+spec:
+  # refer to our service account with proper permissions
+  serviceAccount: cm-updater
+  restartPolicy: Never
+
+  initContainers:
+  - name: k8s-cm-updater
+    image: ozmate/k8s-cm-updater
+    imagePullPolicy: Always
+    # load our secrets
+    envFrom:
+        - secretRef:
+              name: test-app-secrets
+    # configuration
+    env:
+        - name: K8S_CM_UPDATER_NAME_IN
+          value: "test-app-configmap"
+        
+        # NOTE: if write to a separate configmap,
+        # you need create a "dummy" (empty) first
+        # otherwise the pod won't start.
+
+        # uncomment below to write to a new configmap
+        # - name: K8S_CM_UPDATER_NAME_OUT
+        #   value: "test-app-configmap-new"
+        
+        # uncomment below to increase verbosity
+        # - name: K8S_CM_UPDATER_DEBUG
+        #   value: "true"
+  
+  containers:
+  - name: main-container
+    image: alpine:3.9
+    command:
+        - "/bin/sh"
+        - "-c"
+        - "sleep 5 && cat /config/*"
+    volumeMounts:
+    - name: config
+      mountPath: /config
+
+  volumes:
+  - name: config
+    configMap:
+      name: test-app-configmap

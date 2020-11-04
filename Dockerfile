@@ -2,11 +2,9 @@ FROM alpine:3.12.1
 
 ENV KUBECTL_VERSION="v1.19.0"
 ENV YQ_VERSION="3.4.1"
-ENV K8S_CONFIGMAP_NAME_IN=""
-ENV K8S_CONFIGMAP_NAME_OUT=""
 
 # install envstubst
-RUN apk add --no-cache gettext curl
+RUN apk add --no-cache gettext curl bash
 # install yq
 RUN wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
     && chmod +x /usr/local/bin/yq
@@ -16,4 +14,4 @@ RUN curl -Lo /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-re
 
 COPY ./k8s-cm-updater.sh /usr/local/bin/k8s-cm-updater
 
-ENTRYPOINT ["/usr/local/bin/k8s-cm-updater", "$K8S_CONFIGMAP_NAME_IN", "$K8S_CONFIGMAP_NAME_OUT"]
+ENTRYPOINT ["/usr/local/bin/k8s-cm-updater"]
