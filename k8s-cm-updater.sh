@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
+TIMESTAMP=$(date +"%F %T %z")
+SLEEP_TIME=60
+
 # check if we need to be verbose
 if [ -n "${K8S_CM_UPDATER_DEBUG}" ]; then
-    echo "[DEBUG]: envars exposed to the container: ----"
+    echo "${TIMESTAMP} [DEBUG]: envars exposed to the container:"
+    echo "------------------------------------------------------------------"
     env
-    echo "----------------------------------------------"
+    echo "------------------------------------------------------------------"
 fi
 
 show_help() {
@@ -45,7 +49,7 @@ case "$#" in
 esac
 
 [[ ${K8S_CM_UPDATER_NAME_IN} == ${K8S_CM_UPDATER_NAME_OUT} ]] && \
-echo "[WARNING] the script is set to overwrite the existing configmap '${K8S_CM_UPDATER_NAME_IN}'."
+echo "${TIMESTAMP} [WARNING] existing configmap '${K8S_CM_UPDATER_NAME_IN}' will be overwritten."
 
 # prepare tmp filenames
 FILENAME_CM_IN=$(mktemp || exit 1)
@@ -53,7 +57,15 @@ FILENAME_CM_OUT=$(mktemp || exit 1)
 
 # download the configMap into the file while
 kubectl get configmap "${K8S_CM_UPDATER_NAME_IN}" -oyaml > "${FILENAME_CM_IN}" \
-    || { echo "[ERROR] Cannot read configmap ${K8S_CM_UPDATER_NAME_IN}"; exit 1; }
+    || { echo "${TIMESTAMP} [ERROR] Cannot read configmap ${K8S_CM_UPDATER_NAME_IN}"; exit 1; }
+
+if [ -n "${K8S_CM_UPDATER_DEBUG}" ]; then
+    echo "------------------------------------------------------------------"
+    echo "${TIMESTAMP} [DEBUG]: SOURCE ConfigMap:"
+    echo "------------------------------------------------------------------"
+    cat "${FILENAME_CM_IN}"
+    echo "------------------------------------------------------------------"
+fi
 
 # removing all metadata fields and update the name
 cat "${FILENAME_CM_IN}" \
@@ -62,6 +74,7 @@ cat "${FILENAME_CM_IN}" \
     | yq d - 'metadata.resourceVersion' \
     | yq d - 'metadata.selfLink' \
     | yq w - 'metadata.annotations."argocd.argoproj.io/compare-options"' 'IgnoreExtraneous' \
+    | yq d - 'metadata.labels."app.kubernetes.io/instance"' \
     | yq d - 'metadata.annotations."kubectl.kubernetes.io/last-applied-configuration"' \
     | yq w - 'metadata.name' "${K8S_CM_UPDATER_NAME_OUT}" \
     > "${FILENAME_CM_OUT}"
@@ -71,11 +84,12 @@ envsubst <"${FILENAME_CM_OUT}" > "${FILENAME_CM_IN}"
 
 # if we're debugging - let's print out the new configmap
 if [ -n "${K8S_CM_UPDATER_DEBUG}" ]; then
-    echo "[DEBUG]: Ready ConfigMap: ------"
+    echo "${TIMESTAMP} [DEBUG]: DESTINATION ConfigMap:"
+    echo "------------------------------------------------------------------"
     cat "${FILENAME_CM_IN}"
-    echo "--------------------------------"
-    sleep 60
+    echo "------------------------------------------------------------------"
+    sleep ${SLEEP_TIME}
 fi
 
 # creating/updating the configmap
-kubectl apply -f "${FILENAME_CM_IN}" && echo "[SUCCESS] Configmap '${K8S_CM_UPDATER_NAME_OUT}' has been written."
+kubectl apply -f "${FILENAME_CM_IN}" && echo "${TIMESTAMP} [SUCCESS] Configmap '${K8S_CM_UPDATER_NAME_OUT}' has been written."
