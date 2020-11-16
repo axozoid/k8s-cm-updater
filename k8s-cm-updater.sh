@@ -82,6 +82,9 @@ cat "${FILENAME_CM_IN}" \
 # update variables
 envsubst <"${FILENAME_CM_OUT}" > "${FILENAME_CM_IN}"
 
+# creating/updating the configmap
+kubectl apply -f "${FILENAME_CM_IN}" && echo "${TIMESTAMP} [SUCCESS] Configmap '${K8S_CM_UPDATER_NAME_OUT}' has been written."
+
 # if we're debugging - let's print out the new configmap
 if [ -n "${K8S_CM_UPDATER_DEBUG}" ]; then
     echo "${TIMESTAMP} [DEBUG]: DESTINATION ConfigMap:"
@@ -90,6 +93,3 @@ if [ -n "${K8S_CM_UPDATER_DEBUG}" ]; then
     echo "------------------------------------------------------------------"
     sleep ${SLEEP_TIME}
 fi
-
-# creating/updating the configmap
-kubectl apply -f "${FILENAME_CM_IN}" && echo "${TIMESTAMP} [SUCCESS] Configmap '${K8S_CM_UPDATER_NAME_OUT}' has been written."
