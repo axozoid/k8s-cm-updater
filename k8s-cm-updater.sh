@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 TIMESTAMP=$(date +"%F %T %z")
-SLEEP_TIME=60
 
 # check if we need to be verbose
 if [ -n "${K8S_CM_UPDATER_DEBUG}" ]; then
@@ -17,11 +16,12 @@ show_help() {
     echo "Usage: $0 K8S_CM_UPDATER_NAME_IN K8S_CM_UPDATER_NAME_OUT"
     echo "  K8S_CM_UPDATER_NAME_IN - the configmap name to process (with envars)"
     echo "  K8S_CM_UPDATER_NAME_OUT - the configmap name to save to (after replacing envars with values)"
+    echo "  K8S_CM_UPDATER_WRITE_SECRET - if set to any value, a 'Secret' object will be created isntead of 'confiMmap'. The latter is default."
     echo ""
     echo "NOTE: if only K8S_CM_UPDATER_NAME_IN is provided, the original configmap will be overwritten."
     echo ""
     echo "TIP: Instead of passing the names as parameters, the envars with corresponding names can be used:"
-    echo "K8S_CM_UPDATER_NAME_IN=app-config K8S_CM_UPDATER_NAME_OUT=app-config-out ./k8s-cm-updater.sh"
+    echo "K8S_CM_UPDATER_NAME_IN=app-config K8S_CM_UPDATER_NAME_OUT=app-config-out K8S_CM_UPDATER_WRITE_SECRET=true ./$0"
 }
 
 case "$#" in
@@ -35,12 +35,17 @@ case "$#" in
         # rewrite the existing configmap
         K8S_CM_UPDATER_NAME_IN=${1}
         K8S_CM_UPDATER_NAME_OUT=${1}
-
         ;;
     2) 
         # read both names from arguments
         K8S_CM_UPDATER_NAME_IN=${1}
         K8S_CM_UPDATER_NAME_OUT=${2}
+        ;;
+    3)
+        # read both names and the type from arguments
+        K8S_CM_UPDATER_NAME_IN=${1}
+        K8S_CM_UPDATER_NAME_OUT=${2}
+        K8S_CM_UPDATER_WRITE_SECRET=${3}
         ;;
     *) 
         show_help
@@ -54,8 +59,10 @@ echo "${TIMESTAMP} [WARNING] existing configmap '${K8S_CM_UPDATER_NAME_IN}' will
 # prepare tmp filenames
 FILENAME_CM_IN=$(mktemp || exit 1)
 FILENAME_CM_OUT=$(mktemp || exit 1)
+FILENAME_CM_READY=$(mktemp || exit 1)
+FILENAME_CM_READY_JSON=$(mktemp || exit 1)
 
-# download the configMap into the file while
+# dump the configMap into a file
 kubectl get configmap "${K8S_CM_UPDATER_NAME_IN}" -oyaml > "${FILENAME_CM_IN}" \
     || { echo "${TIMESTAMP} [ERROR] Cannot read configmap ${K8S_CM_UPDATER_NAME_IN}"; exit 1; }
 
@@ -76,20 +83,25 @@ cat "${FILENAME_CM_IN}" \
     | yq w - 'metadata.annotations."argocd.argoproj.io/compare-options"' 'IgnoreExtraneous' \
     | yq d - 'metadata.labels."app.kubernetes.io/instance"' \
     | yq d - 'metadata.annotations."kubectl.kubernetes.io/last-applied-configuration"' \
-    | yq w - 'metadata.name' "${K8S_CM_UPDATER_NAME_OUT}" \
+    | yq w -jP - 'metadata.name' "${K8S_CM_UPDATER_NAME_OUT}" \
     > "${FILENAME_CM_OUT}"
 
 # update variables
-envsubst <"${FILENAME_CM_OUT}" > "${FILENAME_CM_IN}"
+envsubst <"${FILENAME_CM_OUT}" > "${FILENAME_CM_READY}"
 
-# creating/updating the configmap
-kubectl apply -f "${FILENAME_CM_IN}" && echo "${TIMESTAMP} [SUCCESS] Configmap '${K8S_CM_UPDATER_NAME_OUT}' has been written."
+# convert to a secret if needed
+if [ -n "${K8S_CM_UPDATER_WRITE_SECRET}" ]; then
+    cat "${FILENAME_CM_READY}" | jq 'with_entries(if .key == "data" then .value=(.value | to_entries | map( { (.key): (.value|@base64) } ) | add ) elif .key == "kind" then .value="Secret" else . end)' > "${FILENAME_CM_READY_JSON}"
+    FILENAME_CM_READY=${FILENAME_CM_READY_JSON}
+fi
 
-# if we're debugging - let's print out the new configmap
+# creating/updating the resource
+kubectl apply -f "${FILENAME_CM_READY}" && echo "${TIMESTAMP} [SUCCESS] Resource '${K8S_CM_UPDATER_NAME_OUT}' has been written."
+
+# if we're debugging - let's print out the new resource
 if [ -n "${K8S_CM_UPDATER_DEBUG}" ]; then
-    echo "${TIMESTAMP} [DEBUG]: DESTINATION ConfigMap:"
+    echo "${TIMESTAMP} [DEBUG]: DESTINATION Resource:"
     echo "------------------------------------------------------------------"
-    cat "${FILENAME_CM_IN}"
+    cat "${FILENAME_CM_READY}"
     echo "------------------------------------------------------------------"
-    sleep ${SLEEP_TIME}
 fi

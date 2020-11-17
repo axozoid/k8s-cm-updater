@@ -10,8 +10,8 @@ metadata:
   name: test-app-secrets
   namespace: k8s-cm-updater
 data:
-  value1: Mzk1MjgkdmRnN0pi
-  value2: c3VQM1JwQHMkdzByRAo=
+  value1: dXNlcm5hbWUx
+  value2: cGFzc3dvcmQx
 ---
 # configmap represents a template with vars
 # that will be filled by values from the secret
@@ -23,10 +23,12 @@ metadata:
   labels:
       app.kubernetes.io/instance: test-app
 data:
-  config.file: |
-    The first value is ${value1}.
-    Extra line.
-  inline-value: ${value2}
+  config.yml: |
+    settings:
+      username: ${value1}
+      active: "true"
+      config:
+        password: ${value2}
 ---
 # create a service account
 apiVersion: v1
@@ -35,7 +37,7 @@ metadata:
   name:  cm-updater
   namespace: k8s-cm-updater
 ---
-# create a role that can read and create configmaps
+# create a role that can read and create configmaps and secrets
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: Role
 metadata:
@@ -44,6 +46,9 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
+  verbs: ["get", "create", "patch"]
+- apiGroups: [""]
+  resources: ["secrets"]
   verbs: ["get", "create", "patch"]
 ---
 # link the role with the service account
@@ -91,10 +96,14 @@ spec:
 
         # uncomment below to write to a new configmap
         # - name: K8S_CM_UPDATER_NAME_OUT
-        #   value: "test-app-configmap-new"
+        #   value: "test-app-configmap-with-secrets"
         
         # uncomment below to increase verbosity
         # - name: K8S_CM_UPDATER_DEBUG
+        #   value: "true"
+
+        # uncomment below to write to a Secret and not to a configMap
+        # - name: K8S_CM_UPDATER_WRITE_SECRET
         #   value: "true"
   
   containers:

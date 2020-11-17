@@ -13,6 +13,7 @@ delivery process separate.
 |K8S_CM_UPDATER_NAME_IN|the configmap name to process (with envar names)|
 |K8S_CM_UPDATER_NAME_OUT|the configmap name to save to (after replacing envars with values)|
 |K8S_CM_UPDATER_DEBUG|if set to any value, the script will print the processed configmap to stdout|
+|K8S_CM_UPDATER_WRITE_SECRET|if set to any value, a 'Secret' object will be created isntead of 'confiMmap'. The latter is default.|
 
 ## Example
 See `example-k8s-cm-updater.yaml` for the full use case.

@@ -4,7 +4,7 @@ ENV KUBECTL_VERSION="v1.19.0"
 ENV YQ_VERSION="3.4.1"
 
 # install envstubst
-RUN apk add --no-cache gettext curl bash
+RUN apk add --no-cache gettext curl bash jq
 # install yq
 RUN wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
     && chmod +x /usr/local/bin/yq
