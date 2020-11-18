@@ -80,8 +80,6 @@ cat "${FILENAME_CM_IN}" \
     | yq d - 'metadata.creationTimestamp' \
     | yq d - 'metadata.resourceVersion' \
     | yq d - 'metadata.selfLink' \
-    | yq w - 'metadata.annotations."argocd.argoproj.io/compare-options"' 'IgnoreExtraneous' \
-    | yq d - 'metadata.labels."app.kubernetes.io/instance"' \
     | yq d - 'metadata.annotations."kubectl.kubernetes.io/last-applied-configuration"' \
     | yq w -jP - 'metadata.name' "${K8S_CM_UPDATER_NAME_OUT}" \
     > "${FILENAME_CM_OUT}"
