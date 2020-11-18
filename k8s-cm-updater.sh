@@ -85,7 +85,7 @@ cat "${FILENAME_CM_IN}" \
     > "${FILENAME_CM_OUT}"
 
 # update variables
-envsubst <"${FILENAME_CM_OUT}" > "${FILENAME_CM_READY}"
+envsubst "$(printf '${%s} ' $(env | sed 's/=.*//'))" < "${FILENAME_CM_OUT}" > "${FILENAME_CM_READY}"
 
 # convert to a secret if needed
 if [ -n "${K8S_CM_UPDATER_WRITE_SECRET}" ]; then
